@@ -31,10 +31,13 @@ class Card:
         return self_number < other_number
 
     def __str__(self):
-        return BASE_PIPS_COURTS[self.number - 1] + self.suit
+        return self.to_num_str()
 
     def __repr__(self):
         return str(self)
 
-    def toNumStr(self):
+    def to_num_str(self):
         return str(self.number) + self.suit
+
+    def to_short_str(self):
+        return BASE_PIPS_COURTS[self.number - 1] + self.suit
