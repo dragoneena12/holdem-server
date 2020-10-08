@@ -31,7 +31,7 @@ class Card:
         return self_number < other_number
 
     def __str__(self):
-        return self.to_num_str()
+        return self.to_short_str()
 
     def __repr__(self):
         return str(self)
@@ -41,3 +41,6 @@ class Card:
 
     def to_short_str(self):
         return BASE_PIPS_COURTS[self.number - 1] + self.suit
+
+    def to_dict(self):
+        return {"number": self.number, "suit": self.suit}

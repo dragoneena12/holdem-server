@@ -30,7 +30,7 @@ async def action_req_card(websocket, msg):
     hand = deck.peek(2)
 
     send_msg = json.dumps({
-        "hand": [{"number": c.number, "suit": c.suit} for c in hand]
+        "hand": deck.peek(2).to_dict_list()
     })
 
     logger.debug("send message: {}".format(send_msg))
