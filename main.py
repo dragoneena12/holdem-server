@@ -29,19 +29,17 @@ async def random_hand(websocket, path):
         logger.debug("websocket: {}".format(websocket))
         logger.debug("message: {}".format(message))
         msg = json.loads(message)
+        if msg["action"] == "reqCard":
+            deck = Deck()
+            deck.shuffle()
+            hand = deck.peek(2)
 
-        got_msg = msg["message"]
+            send_msg = json.dumps({
+                "hand": [{"number": c.number, "suit": c.suit} for c in hand]
+            })
 
-        deck = Deck()
-        deck.shuffle()
-        hand = deck.peek(2)
-        logger.debug(hand)
-        send_msg = json.dumps({
-            "hand": [{"number": c.number, "suit": c.suit} for c in hand]
-        })
-
-        logger.debug("send message: {}".format(send_msg))
-        await websocket.send(send_msg)
+            logger.debug("send message: {}".format(send_msg))
+            await websocket.send(send_msg)
 
 
 if __name__ == '__main__':
