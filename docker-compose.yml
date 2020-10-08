@@ -1,0 +1,12 @@
+version: "3"
+services:
+  python:
+    build:
+      context: .
+      dockerfile: ./docker/python/Dockerfile
+    command: python main.py
+    ports:
+      - 8765:8765
+    volumes:
+      - .:/code
+    restart: always
