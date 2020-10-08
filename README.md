@@ -2,5 +2,5 @@
 
 ```
 docker-compose up -d
-python client.py
+docker-compose exec python python client.py
 ```
