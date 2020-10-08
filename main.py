@@ -24,22 +24,26 @@ async def hello(websocket, path):
     print(f"> {greeting}")
 
 
+async def action_req_card(websocket, msg):
+    deck = Deck()
+    deck.shuffle()
+    hand = deck.peek(2)
+
+    send_msg = json.dumps({
+        "hand": [{"number": c.number, "suit": c.suit} for c in hand]
+    })
+
+    logger.debug("send message: {}".format(send_msg))
+    await websocket.send(send_msg)
+
+
 async def random_hand(websocket, path):
     async for message in websocket:
         logger.debug("websocket: {}".format(websocket))
         logger.debug("message: {}".format(message))
         msg = json.loads(message)
         if msg["action"] == "reqCard":
-            deck = Deck()
-            deck.shuffle()
-            hand = deck.peek(2)
-
-            send_msg = json.dumps({
-                "hand": [{"number": c.number, "suit": c.suit} for c in hand]
-            })
-
-            logger.debug("send message: {}".format(send_msg))
-            await websocket.send(send_msg)
+            await action_req_card(websocket, msg)
 
 
 if __name__ == '__main__':
