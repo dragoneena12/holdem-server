@@ -8,7 +8,9 @@ import json
 import websockets
 import logging
 
-from texasholdem import Deck
+from texasholdem import Deck, Table
+from texasholdem.states import TableContext
+from texasholdem.states.street_state import PreflopStreetState
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -42,12 +44,31 @@ async def random_hand(websocket, path):
         logger.debug("websocket: {}".format(websocket))
         logger.debug("message: {}".format(message))
         msg = json.loads(message)
-        if msg["action"] == "reqCard":
+        action = msg["action"]
+        if action == "reqCard":
             await action_req_card(websocket, msg)
+        elif action in ["join"]:
+            await websocket.send(json.dumps({
+                "message": "action: {}".format()
+            }))
 
+
+async def websocket_queue_handler(
+        websocket: websockets.server.WebSocketServerProtocol, path):
+    logger.debug("-"*40)
+    async for message in websocket:
+        logger.debug("websocket: {}".format(websocket))
+        logger.debug("websocket local_address: {}".format(websocket.local_address))
+        logger.debug("websocket remote_address: {}".format(websocket.remote_address))
+        logger.debug("message: {}".format(message))
+
+        # tableContext.handle()
+
+
+tableContext = TableContext(PreflopStreetState, Table(players_limit=6))
 
 if __name__ == '__main__':
-    start_server = websockets.serve(random_hand, "0.0.0.0", 8765)
+    start_server = websockets.serve(websocket_queue_handler, "0.0.0.0", 8765)
 
     asyncio.get_event_loop().run_until_complete(start_server)
     asyncio.get_event_loop().run_forever()
