@@ -65,7 +65,7 @@ async def websocket_queue_handler(
             logger.debug("message: {}".format(message))
 
             msg = json.loads(message)
-            tableContext.handle(msg)
+            await tableContext.handle(msg)
     except websockets.ConnectionClosedError:
         pass
     finally:

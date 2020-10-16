@@ -7,7 +7,6 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
-def broadcast(msg):
-    for ws in CLIENTS:
-        ws.send(msg)
+async def broadcast(msg):
+    await asyncio.gather(*[ws.send(msg) for ws in CLIENTS], return_exceptions=False)
 

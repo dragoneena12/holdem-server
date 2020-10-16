@@ -19,5 +19,5 @@ class TableContext(Context):
     def get_table(self):
         return self.table
 
-    def handle(self, msg):
-        self.state.handle(self, msg)
+    async def handle(self, msg):
+        await self.state.handle(self, msg)

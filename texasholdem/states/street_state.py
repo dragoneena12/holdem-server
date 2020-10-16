@@ -11,10 +11,10 @@ logger = logging.getLogger(__name__)
 
 
 class GameState(ConcreteState):
-    def invoke_action(self, table_context: TableContext, msg: dict):
+    async def invoke_action(self, table_context: TableContext, msg: dict):
         action_name = msg["action"]
         try:
-            getattr(self, f"action_{action_name}")(table_context, msg)
+            await getattr(self, f"action_{action_name}")(table_context, msg)
         except AttributeError:
             # 目的のアクションがない場合
             pass
@@ -22,8 +22,8 @@ class GameState(ConcreteState):
 
 class StreetState(GameState):
     @abstractmethod
-    def handle(self, table_context: TableContext, msg: dict):
-        self.invoke_action(table_context, msg)
+    async def handle(self, table_context: TableContext, msg: dict):
+        await self.invoke_action(table_context, msg)
 
     def action_check(self, table_context: TableContext, msg: dict):
         raise NotImplementedError()
@@ -42,11 +42,11 @@ class StreetState(GameState):
 
 
 class BeforeGameState(GameState):
-    def handle(self, table_context: TableContext, msg: dict):
+    async def handle(self, table_context: TableContext, msg: dict):
         logger.debug("state: {}".format("BeforeGame State"))
-        self.invoke_action(table_context, msg)
+        await self.invoke_action(table_context, msg)
 
-    def action_seat(self, table_context: TableContext, msg: dict):
+    async def action_seat(self, table_context: TableContext, msg: dict):
         table = table_context.get_table()
         player_id = msg["name"]
         seat_num = int(msg["amount"])
@@ -56,7 +56,7 @@ class BeforeGameState(GameState):
                     player_id
                 )
                 table_context.set_table(table)
-                broadcast(
+                await broadcast(
                     json.dumps(
                         table_context.get_table().player_seating_chart,
                         cls=SasakiJSONEncoder,
@@ -80,9 +80,9 @@ class PreflopStreetState(StreetState):
         # 順番をUTGからにする
         pass
 
-    def handle(self, table_context: TableContext, msg: dict):
+    async def handle(self, table_context: TableContext, msg: dict):
         logger.debug("state: {}".format("Pre-flop State"))
-        self.invoke_action(table_context, msg)
+        await self.invoke_action(table_context, msg)
 
 
 class FlopStreetState(StreetState):
