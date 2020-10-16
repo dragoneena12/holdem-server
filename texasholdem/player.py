@@ -17,3 +17,8 @@ class Player:
 
     def __hash__(self):
         return hash(self.id)
+
+    @staticmethod
+    def get_player_by_id(player_id: str):
+        # TODO
+        return Player(player_id, player_id, 1000)
