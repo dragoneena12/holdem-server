@@ -4,13 +4,14 @@
 
 import asyncio
 import json
+import logging
 
 import websockets
-import logging
 
 from texasholdem import Deck, Table
 from texasholdem.states import TableContext
 from texasholdem.states.street_state import BeforeGameState
+from websock import CLIENTS
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -53,14 +54,22 @@ async def websocket_queue_handler(
     websocket: websockets.server.WebSocketServerProtocol, path
 ):
     logger.debug("-" * 40)
-    async for message in websocket:
-        logger.debug("websocket: {}".format(websocket))
-        logger.debug("websocket local_address: {}".format(websocket.local_address))
-        logger.debug("websocket remote_address: {}".format(websocket.remote_address))
-        logger.debug("message: {}".format(message))
+    CLIENTS.append(websocket)
+    try:
+        async for message in websocket:
+            logger.debug("websocket: {}".format(websocket))
+            logger.debug("websocket local_address: {}".format(websocket.local_address))
+            logger.debug(
+                "websocket remote_address: {}".format(websocket.remote_address)
+            )
+            logger.debug("message: {}".format(message))
 
-        msg = json.loads(message)
-        tableContext.handle(msg)
+            msg = json.loads(message)
+            tableContext.handle(msg)
+    except websockets.ConnectionClosedError:
+        pass
+    finally:
+        CLIENTS.remove(websocket)
 
 
 tableContext = TableContext(BeforeGameState(), Table(players_limit=6))

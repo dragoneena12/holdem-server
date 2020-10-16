@@ -18,6 +18,15 @@ class Player:
     def __hash__(self):
         return hash(self.id)
 
+    def __repr__(self):
+        return str(self)
+
+    def __str__(self):
+        return self.id
+
+    def toJSON(self):
+        return str(self)
+
     @staticmethod
     def get_player_by_id(player_id: str):
         # TODO

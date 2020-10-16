@@ -1,7 +1,10 @@
 from abc import abstractmethod
 import logging
+import json
+import asyncio
 from texasholdem.states import TableContext, ConcreteState
-from texasholdem import Player
+from texasholdem import Player, SasakiJSONEncoder
+from websock import broadcast
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -53,9 +56,14 @@ class BeforeGameState(GameState):
                     player_id
                 )
                 table_context.set_table(table)
+                broadcast(
+                    json.dumps(
+                        table_context.get_table().player_seating_chart,
+                        cls=SasakiJSONEncoder,
+                    )
+                )
             else:
                 pass
-            logger.debug(table_context.get_table().player_seating_chart)
         except IndexError:
             pass
 
