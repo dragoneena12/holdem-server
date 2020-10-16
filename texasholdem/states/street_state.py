@@ -72,7 +72,7 @@ class BeforeGameState(GameState):
         seat_num = int(msg["amount"])
         action_player = self.get_action_player(msg)
         try:
-            if table.player_seating_chart[seat_num] is action_player:
+            if table.player_seating_chart[seat_num] == action_player:
                 table.player_seating_chart[seat_num] = None
                 await table_context.set_table(table)
             else:
