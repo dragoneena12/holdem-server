@@ -1,7 +1,6 @@
 from abc import abstractmethod
 import logging
 import json
-import asyncio
 from texasholdem.states import TableContext, ConcreteState
 from texasholdem import Player, SasakiJSONEncoder
 from websock import broadcast
@@ -11,6 +10,9 @@ logger = logging.getLogger(__name__)
 
 
 class GameState(ConcreteState):
+    async def handle(self, table_context: TableContext, msg: dict):
+        await self.invoke_action(table_context, msg)
+
     async def invoke_action(self, table_context: TableContext, msg: dict):
         action_name = msg["action"]
         try:
@@ -19,12 +21,12 @@ class GameState(ConcreteState):
             # 目的のアクションがない場合
             pass
 
+    def get_action_player(self, msg: dict):
+        player_id = msg["name"]
+        return Player.get_player_by_id(player_id)
+
 
 class StreetState(GameState):
-    @abstractmethod
-    async def handle(self, table_context: TableContext, msg: dict):
-        await self.invoke_action(table_context, msg)
-
     def action_check(self, table_context: TableContext, msg: dict):
         raise NotImplementedError()
 
@@ -42,37 +44,45 @@ class StreetState(GameState):
 
 
 class BeforeGameState(GameState):
-    async def handle(self, table_context: TableContext, msg: dict):
-        logger.debug("state: {}".format("BeforeGame State"))
-        await self.invoke_action(table_context, msg)
+    async def notify_current_status(self, table_context: TableContext):
+        resp = {
+            "state": "beforeGame",
+            "seating_chart": table_context.get_table().player_seating_chart,
+        }
+        await broadcast(json.dumps(resp, cls=SasakiJSONEncoder,))
 
     async def action_seat(self, table_context: TableContext, msg: dict):
         table = table_context.get_table()
-        player_id = msg["name"]
         seat_num = int(msg["amount"])
+        action_player = self.get_action_player(msg)
         try:
-            if table.player_seating_chart[seat_num] is None:
-                table.player_seating_chart[seat_num] = Player.get_player_by_id(
-                    player_id
-                )
-                table_context.set_table(table)
-                await broadcast(
-                    json.dumps(
-                        table_context.get_table().player_seating_chart,
-                        cls=SasakiJSONEncoder,
-                    )
-                )
+            if (
+                table.player_seating_chart[seat_num] is None
+                and action_player not in table.player_seating_chart
+            ):
+                table.player_seating_chart[seat_num] = action_player
+                await table_context.set_table(table)
             else:
                 pass
         except IndexError:
             pass
 
-    def action_leave(self, table_context: TableContext, msg: dict):
-        raise NotImplementedError()
+    async def action_leave(self, table_context: TableContext, msg: dict):
+        table = table_context.get_table()
+        seat_num = int(msg["amount"])
+        action_player = self.get_action_player(msg)
+        try:
+            if table.player_seating_chart[seat_num] is action_player:
+                table.player_seating_chart[seat_num] = None
+                await table_context.set_table(table)
+            else:
+                pass
+        except IndexError:
+            pass
 
-    def action_start(self, table_context: TableContext, msg: dict):
+    async def action_start(self, table_context: TableContext, msg: dict):
         logger.debug("state: {}".format("Game Start!"))
-        table_context.set_state(PreflopStreetState())
+        await table_context.set_state(PreflopStreetState())
 
 
 class PreflopStreetState(StreetState):

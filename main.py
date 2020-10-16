@@ -55,6 +55,7 @@ async def websocket_queue_handler(
 ):
     logger.debug("-" * 40)
     CLIENTS.append(websocket)
+    await tableContext.notify_current_status()
     try:
         async for message in websocket:
             logger.debug("websocket: {}".format(websocket))

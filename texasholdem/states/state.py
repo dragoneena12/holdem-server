@@ -3,5 +3,9 @@ from abc import ABCMeta, abstractmethod
 
 class State(metaclass=ABCMeta):
     @abstractmethod
-    def handle(self, context, msg: dict):
+    async def handle(self, context, msg: dict):
+        pass
+
+    @abstractmethod
+    async def notify_current_status(self, context):
         pass

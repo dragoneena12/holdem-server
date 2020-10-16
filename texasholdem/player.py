@@ -25,7 +25,7 @@ class Player:
         return self.id
 
     def toJSON(self):
-        return str(self)
+        return {"id": self.id, "name": self.name, "bankroll": self.bankroll}
 
     @staticmethod
     def get_player_by_id(player_id: str):
