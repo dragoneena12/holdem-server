@@ -5,13 +5,12 @@
 import asyncio
 import json
 import logging
-
 import websockets
 
+import websock
 from texasholdem import Deck, Table
 from texasholdem.states import TableContext
 from texasholdem.states.street_state import BeforeGameState
-from websock import CLIENTS
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -54,7 +53,9 @@ async def websocket_queue_handler(
     websocket: websockets.server.WebSocketServerProtocol, path
 ):
     logger.debug("-" * 40)
-    CLIENTS.append(websocket)
+    client_id = websock.client_id_count
+    websock.CLIENTS[client_id] = websocket
+    websock.client_id_count += 1
     await tableContext.notify_current_status()
     try:
         async for message in websocket:
@@ -66,11 +67,12 @@ async def websocket_queue_handler(
             logger.debug("message: {}".format(message))
 
             msg = json.loads(message)
+            msg["client_id"] = client_id
             await tableContext.handle(msg)
     except websockets.ConnectionClosedError:
         pass
     finally:
-        CLIENTS.remove(websocket)
+        websock.CLIENTS.pop(client_id)
 
 
 tableContext = TableContext(BeforeGameState(), Table(players_limit=6))

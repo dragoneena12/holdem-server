@@ -4,7 +4,7 @@ import json
 import random
 from texasholdem.states import TableContext, ConcreteState
 from texasholdem import Player, SasakiJSONEncoder
-from websock import broadcast
+from websock import broadcast, unicast
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ class GameState(ConcreteState):
             pass
 
     def get_action_player(self, msg: dict):
-        player_id = msg["name"]
+        player_id = msg["client_id"]
         return Player.get_player_by_id(player_id)
 
 
@@ -56,6 +56,18 @@ class BeforeGameState(GameState):
                 cls=SasakiJSONEncoder,
             )
         )
+
+    async def notify_player_hand(self, table_context: TableContext):
+        table = table_context.get_table()
+        for h in table.hands:
+            msg = {"state": "dealingHands", "hand": h["hand"].to_dict_list()}
+            await unicast(
+                json.dumps(
+                    msg,
+                    cls=SasakiJSONEncoder,
+                ),
+                h["id"],
+            )
 
     async def action_seat(self, table_context: TableContext, msg: dict):
         table = table_context.get_table()
@@ -93,11 +105,6 @@ class BeforeGameState(GameState):
         if table.player_num < 2:
             return
         logger.debug("state: {}".format("Game Start!"))
-        await table_context.set_state(PreflopStreetState(table_context))
-
-
-class PreflopStreetState(StreetState):
-    def __init__(self, table_context: TableContext):
         table = table_context.get_table()
         table.seated_seats = [
             i for i, v in enumerate(table.player_seating_chart) if v is not None
@@ -110,8 +117,18 @@ class PreflopStreetState(StreetState):
             table.current_player = table.seated_seats[
                 (btn + 3) % table.player_num
             ]  # SBとBBの次を想定
-        table_context.set_table(table)
+        table.deck.shuffle()
+        table.hands = [
+            {"id": v.id, "hand": table.deck.draw(2)}
+            for v in table.player_seating_chart
+            if v is not None
+        ]
+        await table_context.set_table(table)
+        await self.notify_player_hand(table_context)
+        await table_context.set_state(PreflopStreetState())
 
+
+class PreflopStreetState(StreetState):
     async def notify_current_status(self, table_context: TableContext):
         table = table_context.get_table()
         resp = {

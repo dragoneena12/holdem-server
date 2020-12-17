@@ -1,4 +1,4 @@
-from texasholdem import Player
+from texasholdem import Player, Deck
 from typing import List, Dict
 
 import logging
@@ -19,6 +19,7 @@ class Table:
         self.players_limit = players_limit
         self.player_num = 0
         self.player_seating_chart = [None for _ in range(players_limit)]
+        self.hands = []
         self.seated_seats = []
         self.player_status = {}  # type: Dict[Player, Dict]
         self.status = {
@@ -26,6 +27,7 @@ class Table:
         }
         self.button_player = 0
         self.current_player = 0  # 0 = button
+        self.deck = Deck()
 
     def __eq__(self, other):
         if not isinstance(other, Table):
