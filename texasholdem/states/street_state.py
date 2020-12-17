@@ -1,6 +1,7 @@
 from abc import abstractmethod
 import logging
 import json
+import random
 from texasholdem.states import TableContext, ConcreteState
 from texasholdem import Player, SasakiJSONEncoder
 from websock import broadcast
@@ -49,7 +50,12 @@ class BeforeGameState(GameState):
             "state": "beforeGame",
             "seating_chart": table_context.get_table().player_seating_chart,
         }
-        await broadcast(json.dumps(resp, cls=SasakiJSONEncoder,))
+        await broadcast(
+            json.dumps(
+                resp,
+                cls=SasakiJSONEncoder,
+            )
+        )
 
     async def action_seat(self, table_context: TableContext, msg: dict):
         table = table_context.get_table()
@@ -61,6 +67,7 @@ class BeforeGameState(GameState):
                 and action_player not in table.player_seating_chart
             ):
                 table.player_seating_chart[seat_num] = action_player
+                table.player_num += 1
                 await table_context.set_table(table)
             else:
                 pass
@@ -74,6 +81,7 @@ class BeforeGameState(GameState):
         try:
             if table.player_seating_chart[seat_num] == action_player:
                 table.player_seating_chart[seat_num] = None
+                table.player_num -= 1
                 await table_context.set_table(table)
             else:
                 pass
@@ -81,14 +89,43 @@ class BeforeGameState(GameState):
             pass
 
     async def action_start(self, table_context: TableContext, msg: dict):
+        table = table_context.get_table()
+        if table.player_num < 2:
+            return
         logger.debug("state: {}".format("Game Start!"))
-        await table_context.set_state(PreflopStreetState())
+        await table_context.set_state(PreflopStreetState(table_context))
 
 
 class PreflopStreetState(StreetState):
-    def __init__(self):
-        # 順番をUTGからにする
-        pass
+    def __init__(self, table_context: TableContext):
+        table = table_context.get_table()
+        table.seated_seats = [
+            i for i, v in enumerate(table.player_seating_chart) if v is not None
+        ]
+        btn = random.randint(0, table.player_num - 1)
+        table.button_player = table.seated_seats[btn]
+        if table.player_num == 2:
+            table.current_player = table.button_player
+        else:
+            table.current_player = table.seated_seats[
+                (btn + 3) % table.player_num
+            ]  # SBとBBの次を想定
+        table_context.set_table(table)
+
+    async def notify_current_status(self, table_context: TableContext):
+        table = table_context.get_table()
+        resp = {
+            "state": "preflop",
+            "seating_chart": table.player_seating_chart,
+            "button_player": table.button_player,
+            "current_player": table.current_player,
+        }
+        await broadcast(
+            json.dumps(
+                resp,
+                cls=SasakiJSONEncoder,
+            )
+        )
 
     async def handle(self, table_context: TableContext, msg: dict):
         logger.debug("state: {}".format("Pre-flop State"))

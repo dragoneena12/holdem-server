@@ -16,12 +16,16 @@ class Table:
             "BB": 2,
             "ante": 0,
         }
+        self.players_limit = players_limit
+        self.player_num = 0
         self.player_seating_chart = [None for _ in range(players_limit)]
+        self.seated_seats = []
         self.player_status = {}  # type: Dict[Player, Dict]
         self.status = {
             "player_order": [],  # type: List[Player]
         }
-        self.current_player = 0  # 0 = SB
+        self.button_player = 0
+        self.current_player = 0  # 0 = button
 
     def __eq__(self, other):
         if not isinstance(other, Table):
@@ -33,4 +37,3 @@ class Table:
 
     def __change_stakes(self, sb: int, bb: int, ante=0):
         self.stakes = {"SB": sb, "BB": bb, "ante": ante}
-
