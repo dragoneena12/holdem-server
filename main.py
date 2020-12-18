@@ -29,7 +29,6 @@ async def hello(websocket, path):
 async def action_req_card(websocket, msg):
     deck = Deck()
     deck.shuffle()
-    hand = deck.peek(2)
 
     send_msg = json.dumps({"hand": deck.peek(2).to_dict_list()})
 
@@ -46,7 +45,7 @@ async def random_hand(websocket, path):
         if action == "reqCard":
             await action_req_card(websocket, msg)
         elif action in ["join"]:
-            await websocket.send(json.dumps({"message": "action: {}".format()}))
+            await websocket.send(json.dumps({"message": "action: {}".format("")}))
 
 
 async def websocket_queue_handler(

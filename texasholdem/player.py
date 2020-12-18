@@ -31,3 +31,9 @@ class Player:
     def get_player_by_id(player_id: str):
         # TODO
         return Player(player_id, player_id, 1000)
+
+    # 開発用メソッド。実際はDBに問い合わせたりする。
+    @staticmethod
+    def generate_player(player_id: str, player_name: str):
+        # TODO
+        return Player(player_id, player_name, 1000)

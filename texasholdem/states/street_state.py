@@ -24,7 +24,8 @@ class GameState(ConcreteState):
 
     def get_action_player(self, msg: dict):
         player_id = msg["client_id"]
-        return Player.get_player_by_id(player_id)
+        player_name = msg["name"]
+        return Player.generate_player(player_id, player_name)
 
 
 class StreetState(GameState):
