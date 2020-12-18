@@ -25,23 +25,69 @@ class GameState(ConcreteState):
     def get_action_player(self, msg: dict):
         player_id = msg["client_id"]
         player_name = msg["name"]
-        return Player.generate_player(player_id, player_name)
+        return Player.get_player_by_id(player_id, player_name)
+
+    def next_player(self, table):
+        cp = table.current_player
+        cp = (cp + 1) % table.players_limit
+        while table.player_seating_chart[cp] is None:
+            cp = (cp + 1) % table.players_limit
+        logger.debug("next player is {} !".format(cp))
+        table.current_player = cp
+
+    def betting(self, player_seat: int, amount: int, table):
+        if not table.player_seating_chart[player_seat].pay(
+            amount - table.betting[player_seat]
+        ):
+            logger.debug("state: {}".format("Bankroll in not enough."))
+            raise Exception("Bankroll in not enough.")  # TODO: いい感じの例外クラスを作る
+        table.betting[player_seat] = amount
+        logger.debug(
+            "betting: player_seat = {}, amount = {}".format(player_seat, amount)
+        )
 
 
 class StreetState(GameState):
-    def action_check(self, table_context: TableContext, msg: dict):
+    async def action_check(self, table_context: TableContext, msg: dict):
         raise NotImplementedError()
 
-    def action_bet(self, table_context: TableContext, msg: dict):
+    async def action_bet(self, table_context: TableContext, msg: dict):
         raise NotImplementedError()
 
-    def action_call(self, table_context: TableContext, msg: dict):
-        raise NotImplementedError()
+    async def action_call(self, table_context: TableContext, msg: dict):
+        table = table_context.get_table()
+        action_player = self.get_action_player(msg)
+        if action_player is table.player_seating_chart[table.current_player]:
+            logger.debug("[ACTION] CALL")
+            self.betting(
+                table.current_player,
+                table.current_betting_amount,
+                table,
+            )
+            self.next_player(table)
+            await table_context.set_table(table)
+        else:
+            return
 
-    def action_raise(self, table_context: TableContext, msg: dict):
-        raise NotImplementedError()
+    async def action_raise(self, table_context: TableContext, msg: dict):
+        table = table_context.get_table()
+        action_player = self.get_action_player(msg)
+        if action_player is table.player_seating_chart[table.current_player]:
+            logger.debug("[ACTION] RAISE: {}".format(msg["amount"]))
+            if msg["amount"] <= table.current_betting_amount:
+                return
+            self.betting(
+                table.current_player,
+                msg["amount"],
+                table,
+            )
+            table.current_betting_amount = msg["amount"]
+            self.next_player(table)
+            await table_context.set_table(table)
+        else:
+            return
 
-    def action_fold(self, table_context: TableContext, msg: dict):
+    async def action_fold(self, table_context: TableContext, msg: dict):
         raise NotImplementedError()
 
 
@@ -107,17 +153,26 @@ class BeforeGameState(GameState):
             return
         logger.debug("state: {}".format("Game Start!"))
         table = table_context.get_table()
-        table.seated_seats = [
-            i for i, v in enumerate(table.player_seating_chart) if v is not None
-        ]
-        btn = random.randint(0, table.player_num - 1)
-        table.button_player = table.seated_seats[btn]
+        table.current_player = random.randint(0, table.players_limit - 1)
+        self.next_player(table)
+        table.button_player = table.current_player
         if table.player_num == 2:
+            self.betting(table.current_player, table.stakes["SB"], table)
+            self.next_player(table)
+            self.betting(
+                table.current_player,
+                table.stakes["BB"],
+                table,
+            )
+            table.current_betting_amount = table.stakes["BB"]
             table.current_player = table.button_player
         else:
-            table.current_player = table.seated_seats[
-                (btn + 3) % table.player_num
-            ]  # SBとBBの次を想定
+            self.next_player(table)
+            self.betting(table.current_player, table.stakes["SB"], table)
+            self.next_player(table)
+            self.betting(table.current_player, table.stakes["BB"], table)
+            table.current_betting_amount = table.stakes["BB"]
+            self.next_player(table)
         table.deck.shuffle()
         table.hands = [
             {"id": v.id, "hand": table.deck.draw(2)}
@@ -137,6 +192,7 @@ class PreflopStreetState(StreetState):
             "seating_chart": table.player_seating_chart,
             "button_player": table.button_player,
             "current_player": table.current_player,
+            "betting": table.betting,
         }
         await broadcast(
             json.dumps(

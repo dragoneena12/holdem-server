@@ -20,7 +20,9 @@ class Table:
         self.player_num = 0
         self.player_seating_chart = [None for _ in range(players_limit)]
         self.hands = []
-        self.seated_seats = []
+        self.seated_players = []
+        self.betting = [0 for _ in range(players_limit)]
+        self.current_betting_amount = 0
         self.player_status = {}  # type: Dict[Player, Dict]
         self.status = {
             "player_order": [],  # type: List[Player]
