@@ -31,6 +31,7 @@ class Player:
 
     def pay(self, amount: int):
         if self.bankroll >= amount:
+            self.bankroll -= amount
             return True
         else:
             return False
