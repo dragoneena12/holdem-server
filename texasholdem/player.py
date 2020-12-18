@@ -3,7 +3,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-PLAYERS = {}
+PLAYERS = {}  # type: dict[str, Player]
 
 
 class Player:

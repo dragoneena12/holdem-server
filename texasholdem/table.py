@@ -21,7 +21,7 @@ class Table:
         self.players_limit = players_limit
         self.player_num = 0
         self.player_seating_chart = [None for _ in range(players_limit)]
-        self.hands = []
+        self.hands = {}
         self.board = []
         self.seated_players = []
         self.betting = [0 for _ in range(players_limit)]
@@ -30,9 +30,7 @@ class Table:
         self.current_betting_amount = 0
         self.current_pot_size = 0
         self.player_status = {}  # type: Dict[Player, Dict]
-        self.status = {
-            "player_order": [],  # type: List[Player]
-        }
+        self.status = "beforeGame"
         self.button_player = 0
         self.current_player = 0  # 0 = button
         self.deck = Deck()
@@ -69,6 +67,17 @@ class Table:
 
     def is_round_over(self):
         logger.debug("checking is_round_over...")
+        # そもそも参加者がいない場合
+        if reduce(
+            lambda a, b: a and b,
+            list(
+                map(
+                    lambda x: not self.player_ongoing[x],
+                    range(self.players_limit),
+                )
+            ),
+        ):
+            return False
         return reduce(
             lambda a, b: a and b,
             list(

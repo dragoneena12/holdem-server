@@ -1,11 +1,8 @@
-from functools import reduce
-from abc import abstractmethod
 import logging
-import json
 import random
 from texasholdem.states import TableContext, ConcreteState
-from texasholdem import Player, Table, SasakiJSONEncoder
-from websock import broadcast, unicast
+from texasholdem import Player, Table, Deck
+from websock import notify
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -27,6 +24,39 @@ class GameState(ConcreteState):
         player_id = msg["client_id"]
         player_name = msg["name"]
         return Player.get_player_by_id(player_id, player_name)
+
+    async def notify_current_status(self, table_context: TableContext):
+        logger.debug("lets notify!")
+        table = table_context.get_table()
+        unicast_msg = {}
+        for player_id, hand in table.hands.items():
+            unicast_msg[player_id] = {
+                "state": table.status,
+                "hand": hand.to_dict_list(),
+                "seating_chart": table.player_seating_chart,
+                "button_player": table.button_player,
+                "current_player": table.current_player,
+                "betting": table.betting,
+                "ongoing": table.player_ongoing,
+                "board": table.board,
+                "pot_size": table.current_pot_size,
+            }
+        broadcast_msg = {
+            "state": table.status,
+            "hand": [],
+            "seating_chart": table.player_seating_chart,
+            "button_player": table.button_player,
+            "current_player": table.current_player,
+            "betting": table.betting,
+            "ongoing": table.player_ongoing,
+            "board": table.board,
+            "pot_size": table.current_pot_size,
+        }
+        await notify(unicast_msg, broadcast_msg)
+
+    async def action_reset(self, table_context: TableContext, msg: dict):
+        await table_context.set_table(Table(players_limit=6))
+        await table_context.set_state(BeforeGameState())
 
 
 class StreetState(GameState):
@@ -82,30 +112,6 @@ class StreetState(GameState):
 
 
 class BeforeGameState(GameState):
-    async def notify_current_status(self, table_context: TableContext):
-        resp = {
-            "state": "beforeGame",
-            "seating_chart": table_context.get_table().player_seating_chart,
-        }
-        await broadcast(
-            json.dumps(
-                resp,
-                cls=SasakiJSONEncoder,
-            )
-        )
-
-    async def notify_player_hand(self, table_context: TableContext):
-        table = table_context.get_table()
-        for h in table.hands:
-            msg = {"state": "dealingHands", "hand": h["hand"].to_dict_list()}
-            await unicast(
-                json.dumps(
-                    msg,
-                    cls=SasakiJSONEncoder,
-                ),
-                h["id"],
-            )
-
     async def action_seat(self, table_context: TableContext, msg: dict):
         table = table_context.get_table()
         seat_num = int(msg["amount"])
@@ -118,6 +124,8 @@ class BeforeGameState(GameState):
                 table.player_seating_chart[seat_num] = action_player
                 table.player_num += 1
                 table.player_ongoing[seat_num] = True
+                table.hands[action_player.id] = Deck([])
+                logger.debug("#" * 40)
                 await table_context.set_table(table)
             else:
                 pass
@@ -133,6 +141,7 @@ class BeforeGameState(GameState):
                 table.player_seating_chart[seat_num] = None
                 table.player_num -= 1
                 table.player_ongoing[seat_num] = False
+                table.hands.pop(action_player.id)
                 await table_context.set_table(table)
             else:
                 pass
@@ -164,14 +173,13 @@ class BeforeGameState(GameState):
             table.bet(table.current_player, table.stakes["BB"])
             table.current_betting_amount = table.stakes["BB"]
             table.next_player()
+        table.status = "dealingHands"
         table.deck.shuffle()
-        table.hands = [
-            {"id": v.id, "hand": table.deck.draw(2)}
-            for v in table.player_seating_chart
-            if v is not None
-        ]
+        for player_id in table.hands.keys():
+            table.hands[player_id] = table.deck.draw(2)
         await table_context.set_table(table)
-        await self.notify_player_hand(table_context)
+        table.status = "preflop"
+        await table_context.set_table(table)
         await table_context.set_state(PreflopStreetState())
 
     async def next_round(self, table_context: TableContext):
@@ -179,23 +187,6 @@ class BeforeGameState(GameState):
 
 
 class PreflopStreetState(StreetState):
-    async def notify_current_status(self, table_context: TableContext):
-        table = table_context.get_table()
-        resp = {
-            "state": "preflop",
-            "seating_chart": table.player_seating_chart,
-            "button_player": table.button_player,
-            "current_player": table.current_player,
-            "betting": table.betting,
-            "ongoing": table.player_ongoing,
-        }
-        await broadcast(
-            json.dumps(
-                resp,
-                cls=SasakiJSONEncoder,
-            )
-        )
-
     async def handle(self, table_context: TableContext, msg: dict):
         logger.debug("state: {}".format("Pre-flop State"))
         await self.invoke_action(table_context, msg)
@@ -204,29 +195,11 @@ class PreflopStreetState(StreetState):
         table = table_context.get_table()
         table.next_round()
         table.board.extend(table.deck.draw(3).to_dict_list())
+        table.status = "flop"
         await table_context.set_state(FlopStreetState())
 
 
 class FlopStreetState(StreetState):
-    async def notify_current_status(self, table_context: TableContext):
-        table = table_context.get_table()
-        resp = {
-            "state": "flop",
-            "seating_chart": table.player_seating_chart,
-            "button_player": table.button_player,
-            "current_player": table.current_player,
-            "betting": table.betting,
-            "ongoing": table.player_ongoing,
-            "board": table.board,
-            "pot_size": table.current_pot_size,
-        }
-        await broadcast(
-            json.dumps(
-                resp,
-                cls=SasakiJSONEncoder,
-            )
-        )
-
     async def handle(self, table_context: TableContext, msg: dict):
         logger.debug("state: {}".format("Flop State"))
         await self.invoke_action(table_context, msg)
@@ -235,29 +208,11 @@ class FlopStreetState(StreetState):
         table = table_context.get_table()
         table.next_round()
         table.board.extend(table.deck.draw(1).to_dict_list())
+        table.status = "turn"
         await table_context.set_state(TurnStreetState())
 
 
 class TurnStreetState(StreetState):
-    async def notify_current_status(self, table_context: TableContext):
-        table = table_context.get_table()
-        resp = {
-            "state": "flop",
-            "seating_chart": table.player_seating_chart,
-            "button_player": table.button_player,
-            "current_player": table.current_player,
-            "betting": table.betting,
-            "ongoing": table.player_ongoing,
-            "board": table.board,
-            "pot_size": table.current_pot_size,
-        }
-        await broadcast(
-            json.dumps(
-                resp,
-                cls=SasakiJSONEncoder,
-            )
-        )
-
     async def handle(self, table_context: TableContext, msg: dict):
         logger.debug("state: {}".format("Turn State"))
         await self.invoke_action(table_context, msg)
@@ -266,6 +221,7 @@ class TurnStreetState(StreetState):
         table = table_context.get_table()
         table.next_round()
         table.board.extend(table.deck.draw(1).to_dict_list())
+        table.status = "river"
         await table_context.set_state(TurnStreetState())
 
 
