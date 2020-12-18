@@ -9,3 +9,7 @@ class State(metaclass=ABCMeta):
     @abstractmethod
     async def notify_current_status(self, context):
         pass
+
+    @abstractmethod
+    async def next_round(self, context):
+        pass

@@ -17,6 +17,8 @@ class TableContext(Context):
     async def set_table(self, table: Table):
         self.table = table
         await self.state.notify_current_status(self)
+        if self.table.is_round_over():
+            await self.state.next_round(self)
 
     def get_table(self):
         return self.table
