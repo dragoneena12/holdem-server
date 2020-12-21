@@ -125,7 +125,6 @@ class BeforeGameState(GameState):
                 table.player_num += 1
                 table.player_ongoing[seat_num] = True
                 table.hands[action_player.id] = Deck([])
-                logger.debug("#" * 40)
                 await table_context.set_table(table)
             else:
                 pass
@@ -154,7 +153,10 @@ class BeforeGameState(GameState):
             return
         logger.debug("state: {}".format("Game Start!"))
         table = table_context.get_table()
-        table.current_player = random.randint(0, table.players_limit - 1)
+        if table.current_player == -1:
+            table.current_player = random.randint(0, table.players_limit - 1)
+        else:
+            table.current_player = table.button_player
         table.next_player()
         table.button_player = table.current_player
         if table.player_num == 2:
@@ -174,6 +176,7 @@ class BeforeGameState(GameState):
             table.current_betting_amount = table.stakes["BB"]
             table.next_player()
         table.status = "dealingHands"
+        table.deck = Deck()
         table.deck.shuffle()
         for player_id in table.hands.keys():
             table.hands[player_id] = table.deck.draw(2)
@@ -193,8 +196,9 @@ class PreflopStreetState(StreetState):
 
     async def next_round(self, table_context: TableContext):
         table = table_context.get_table()
-        table.next_round()
-        table.board.extend(table.deck.draw(3).to_dict_list())
+        table.next_round_initialize()
+        if table.player_ongoing.count(True) > 1:
+            table.board.extend(table.deck.draw(3).to_dict_list())
         table.status = "flop"
         await table_context.set_state(FlopStreetState())
 
@@ -206,8 +210,9 @@ class FlopStreetState(StreetState):
 
     async def next_round(self, table_context: TableContext):
         table = table_context.get_table()
-        table.next_round()
-        table.board.extend(table.deck.draw(1).to_dict_list())
+        table.next_round_initialize()
+        if table.player_ongoing.count(True) > 1:
+            table.board.extend(table.deck.draw(1).to_dict_list())
         table.status = "turn"
         await table_context.set_state(TurnStreetState())
 
@@ -219,10 +224,11 @@ class TurnStreetState(StreetState):
 
     async def next_round(self, table_context: TableContext):
         table = table_context.get_table()
-        table.next_round()
-        table.board.extend(table.deck.draw(1).to_dict_list())
+        table.next_round_initialize()
+        if table.player_ongoing.count(True) > 1:
+            table.board.extend(table.deck.draw(1).to_dict_list())
         table.status = "river"
-        await table_context.set_state(TurnStreetState())
+        await table_context.set_state(RiverStreetState())
 
 
 class RiverStreetState(StreetState):
@@ -230,8 +236,40 @@ class RiverStreetState(StreetState):
         logger.debug("state: {}".format("River State"))
         await self.invoke_action(table_context, msg)
 
+    async def next_round(self, table_context: TableContext):
+        table = table_context.get_table()
+        table.next_round_initialize()
+        if table.player_ongoing.count(True) > 1:
+            pass
+        table.status = "gameEnd"
+        await table_context.set_state(GameEndState())
 
-class ShowdownState(GameState):
+
+class GameEndState(GameState):
     async def handle(self, table_context: TableContext, msg: dict):
-        logger.debug("state: {}".format("Showdown State"))
+        logger.debug("state: {}".format("GameEnd State"))
         await self.invoke_action(table_context, msg)
+
+    async def next_round(self, table_context: TableContext):
+        table = table_context.get_table()
+        if table.player_ongoing.count(True) == 1:
+            table.player_seating_chart[
+                table.player_ongoing.index(True)
+            ].bankroll += table.current_pot_size
+        else:
+            # 勝敗判定処理
+            pass
+
+        # 初期化処理
+        table.hands = {}
+        for player in table.player_seating_chart:
+            if player is not None:
+                table.hands[player.id] = Deck([])
+        table.board = []
+        table.betting = [0 for _ in range(table.players_limit)]
+        table.player_ongoing = [v is not None for v in table.player_seating_chart]
+        table.played = [False for _ in range(table.players_limit)]
+        table.current_betting_amount = 0
+        table.current_pot_size = 0
+        table.status = "beforeGame"
+        await table_context.set_state(BeforeGameState())

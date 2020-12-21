@@ -10,6 +10,8 @@ class TableContext(Context):
     async def set_state(self, state_obj: ConcreteState):
         self.state = state_obj
         await self.state.notify_current_status(self)
+        if self.table.is_round_over():
+            await self.state.next_round(self)
 
     def get_state(self):
         return self.state.get_concrete_state()

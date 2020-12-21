@@ -1,7 +1,7 @@
 from functools import reduce
 
 from texasholdem import Player, Deck
-from typing import List, Dict
+from typing import Dict, List
 
 import logging
 
@@ -20,19 +20,19 @@ class Table:
         }
         self.players_limit = players_limit
         self.player_num = 0
-        self.player_seating_chart = [None for _ in range(players_limit)]
-        self.hands = {}
+        self.player_seating_chart = [
+            None for _ in range(players_limit)
+        ]  # type: List[Player]
+        self.hands = {}  # type: Dict[str, Deck]
         self.board = []
-        self.seated_players = []
         self.betting = [0 for _ in range(players_limit)]
         self.player_ongoing = [False for _ in range(players_limit)]
         self.played = [False for _ in range(players_limit)]
         self.current_betting_amount = 0
         self.current_pot_size = 0
-        self.player_status = {}  # type: Dict[Player, Dict]
         self.status = "beforeGame"
         self.button_player = 0
-        self.current_player = 0  # 0 = button
+        self.current_player = -1  # 0 = button
         self.deck = Deck()
 
     def __eq__(self, other):
@@ -68,16 +68,12 @@ class Table:
     def is_round_over(self):
         logger.debug("checking is_round_over...")
         # そもそも参加者がいない場合
-        if reduce(
-            lambda a, b: a and b,
-            list(
-                map(
-                    lambda x: not self.player_ongoing[x],
-                    range(self.players_limit),
-                )
-            ),
-        ):
+        if self.player_ongoing.count(True) == 0:
             return False
+        # 参加者が一人になった場合
+        elif self.player_ongoing.count(True) == 1:
+            return True
+
         return reduce(
             lambda a, b: a and b,
             list(
@@ -88,7 +84,7 @@ class Table:
             ),
         )
 
-    def next_round(self):
+    def next_round_initialize(self):
         self.current_pot_size += reduce(lambda a, b: a + b, self.betting)
         self.betting = [0 for _ in self.betting]
         self.played = [False for _ in self.played]
