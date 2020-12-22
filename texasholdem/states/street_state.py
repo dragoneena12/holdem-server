@@ -61,10 +61,10 @@ class GameState(ConcreteState):
 
 class StreetState(GameState):
     async def action_check(self, table_context: TableContext, msg: dict):
-        raise NotImplementedError()
+        await self.action_call(table_context, msg)
 
     async def action_bet(self, table_context: TableContext, msg: dict):
-        raise NotImplementedError()
+        await self.action_raise(table_context, msg)
 
     async def action_call(self, table_context: TableContext, msg: dict):
         table = table_context.get_table()
@@ -88,13 +88,15 @@ class StreetState(GameState):
             logger.debug("[ACTION] RAISE: {}".format(msg["amount"]))
             if msg["amount"] <= table.current_betting_amount:
                 return
-            table.bet(
+            if table.bet(
                 table.current_player,
                 msg["amount"],
-            )
-            table.current_betting_amount = msg["amount"]
-            table.played[table.current_player] = True
-            table.next_player()
+            ):
+                table.current_betting_amount = msg["amount"]
+                table.played[table.current_player] = True
+                table.next_player()
+            else:
+                return
             await table_context.set_table(table)
         else:
             return

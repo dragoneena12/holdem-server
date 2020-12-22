@@ -59,11 +59,13 @@ class Table:
             amount - self.betting[player_seat]
         ):
             logger.debug("state: {}".format("Bankroll in not enough."))
-            raise Exception("Bankroll in not enough.")  # TODO: いい感じの例外クラスを作る
+            # raise Exception("Bankroll in not enough.") TODO: いい感じの例外クラスを作る
+            return False
         self.betting[player_seat] = amount
         logger.debug(
             "betting: player_seat = {}, amount = {}".format(player_seat, amount)
         )
+        return True
 
     def is_round_over(self):
         logger.debug("checking is_round_over...")
@@ -74,14 +76,14 @@ class Table:
         elif self.player_ongoing.count(True) == 1:
             return True
 
-        return reduce(
-            lambda a, b: a and b,
-            list(
-                map(
-                    lambda x: not self.player_ongoing[x] or self.played[x],
-                    range(self.players_limit),
-                )
-            ),
+        # 参加者全員がプレイ済み　かつ　全員のベット額が一致
+        return all(
+            not self.player_ongoing[i] or self.played[i]
+            for i in range(self.players_limit)
+        ) and all(
+            v == self.current_betting_amount
+            for i, v in enumerate(self.betting)
+            if self.player_ongoing[i]
         )
 
     def next_round_initialize(self):
