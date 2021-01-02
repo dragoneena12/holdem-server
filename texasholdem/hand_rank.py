@@ -38,22 +38,25 @@ class RankName(enum.Enum):
     high_card = 1
 
 
-class HandRank:
+class HandRank5:
     def __init__(self, cards: List[Card] = None):
-        if len(cards) < 5:
-            logger.error("cards is not enough!")
+        if len(cards) != 5:
+            logger.error("cannot initialize HandRank5 with other than 5 cards")
             return
         else:
-            self.rank_name = RankName.high_card
-            self.rank_number = [7, 6, 5, 4, 2]
-            self.kicker = []
+            self.rank_name, self.rank_number, self.kicker = self.get_rank(cards)
 
     def get_rank(self, cards: List[Card]):
         if len(cards) != 5:
-            logger.error("cannot call get_rank with other than 5 cards!")
-            return
+            logger.error("cannot call get_rank with other than 5 cards")
+            raise Exception
         number_count = [0 for c in range(14)]
         suit_count = {}
+        isStraight = False
+        isFlush = False
+        rank_name = RankName.high_card
+        rank_number = []
+        kicker = []
         for c in cards:
             number_count[c.number] += 1
             if c.number == 1:
@@ -62,39 +65,69 @@ class HandRank:
                 suit_count[c.suit] += 1
             else:
                 suit_count[c.suit] = 1
-        self.rank_name = RankName.high_card
+        rank_name = RankName.high_card
+        # pair系hand判定
         for i in range(2, 15):
-            if number_count(i) == 2:
-                if self.rank_name == RankName.high_card:
-                    self.rank_name = RankName.one_pair
-                    self.rank_number.append(i)
-                elif self.rank_name == RankName.one_pair:
-                    self.rank_name = RankName.two_pair
-                    self.rank_number.insert(0, i)
-                elif self.rank_name == RankName.three_of_a_kind:
-                    self.rank_name = RankName.full_house
-                    self.rank_number.append(i)
-
-        if max(number_count) >= 2:
-            self.rank = RankName.one_pair
-        if len(v for v in number_count if number_count >= 2) >= 2:
-            self.rank = RankName.two_pair
-        if max(number_count) >= 3:
-            self.rank = RankName.three_of_a_kind
+            if number_count(i) == 1:
+                kicker.insert(0, i)
+            elif number_count(i) == 2:
+                if rank_name == RankName.high_card:
+                    rank_name = RankName.one_pair
+                    rank_number.insert(0, i)
+                elif rank_name == RankName.one_pair:
+                    rank_name = RankName.two_pair
+                    rank_number.insert(0, i)
+                elif rank_name == RankName.three_of_a_kind:
+                    rank_name = RankName.full_house
+                    rank_number.append(i)
+            elif number_count(i) == 3:
+                if rank_name == RankName.high_card:
+                    rank_name = RankName.three_of_a_kind
+                    rank_number.insert(0, i)
+                elif rank_name == RankName.one_pair:
+                    rank_name = RankName.full_house
+                    rank_number.insert(0, i)
+            elif number_count(i) == 4:
+                rank_name = RankName.four_of_a_kind
+                rank_number.insert(0, i)
+        # Straight判定
+        for i in range(1, 11):
+            flag = True
+            for j in range(5):
+                if number_count(i + j) != 1:
+                    flag = False
+            if flag:
+                isStraight = True
+        # Flush判定
+        for i, v in suit_count.items():
+            if v == 5:
+                isFlush = True
+        # 役判定
+        if isStraight and isFlush:
+            rank_name = RankName.straight_flush
+        if isStraight and rank_name < RankName.straight:
+            rank_name = RankName.straight
+        if isFlush and rank_name < RankName.flush:
+            rank_name = RankName.flush
+        return (rank_name, rank_number, kicker)
 
     def to_dict(self):
         return {"rank": self.rank, "kicker": self.kicker.to_dict()}
 
-    def __eq__(self, other: HandRank):
-        if not isinstance(other, HandRank):
+    def __eq__(self, other: HandRank5):
+        if not isinstance(other, HandRank5):
             return NotImplemented
-        return self.rank == other.rank and self.kicker == other.kicker
+        return (
+            self.rank_name == other.rank_name
+            and self.rank_number == other.rank_number
+            and self.kicker == other.kicker
+        )
 
     def __lt__(self, other):
-        if not isinstance(other, HandRank):
+        if not isinstance(other, HandRank5):
             return NotImplemented
-        return self.rank < other.rank or (
-            self.rank == other.rank and self.kicker < other.kicker
+        return self.rank_name < other.rank_name or (
+            self.rank_name == other.rank_name and self.kicker < other.kicker
         )
 
     def __str__(self) -> str:
