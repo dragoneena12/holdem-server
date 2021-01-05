@@ -35,6 +35,9 @@ class RankName(enum.IntEnum):
     one_pair = 2
     high_card = 1
 
+    def __str__(self):
+        return self.name
+
 
 class HandRank:
     def __init__(self, cards: List[Card] = None):

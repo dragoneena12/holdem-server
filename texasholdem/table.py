@@ -1,6 +1,6 @@
 from functools import reduce
 
-from texasholdem import Player, Deck
+from texasholdem import Player, Deck, Card, HandRank
 from typing import Dict, List
 
 import logging
@@ -23,7 +23,8 @@ class Table:
         self.player_seating_chart = [
             None for _ in range(players_limit)
         ]  # type: List[Player]
-        self.hands = {}  # type: Dict[str, Deck]
+        self.hands = {}  # type: Dict[str, List[Card]]
+        self.hand_ranks = {}  # type: Dict[str, HandRank]
         self.board = []
         self.betting = [0 for _ in range(players_limit)]
         self.player_ongoing = [False for _ in range(players_limit)]
@@ -93,3 +94,10 @@ class Table:
         self.current_betting_amount = 0
         self.current_player = self.button_player
         self.next_player()
+
+    def update_hand_rank(self):
+        for player in self.player_seating_chart:
+            if player is not None:
+                self.hand_ranks[player.id] = HandRank(
+                    self.hands[player.id] + self.board
+                )

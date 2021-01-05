@@ -1,6 +1,7 @@
 from texasholdem.player import Player
 from texasholdem.card import Card
 from texasholdem.deck import Deck
+from texasholdem.hand_rank import HandRank
 from texasholdem.table import Table
 from texasholdem.error import (
     NotEnoughPlayerError,

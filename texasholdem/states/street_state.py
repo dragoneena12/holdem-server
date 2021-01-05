@@ -32,13 +32,16 @@ class GameState(ConcreteState):
         for player_id, hand in table.hands.items():
             unicast_msg[player_id] = {
                 "state": table.status,
-                "hand": hand.to_dict_list(),
+                "hand": [c.to_dict() for c in hand],
+                "hand_rank": str(table.hand_ranks[player_id])
+                if player_id in table.hand_ranks
+                else None,
                 "seating_chart": table.player_seating_chart,
                 "button_player": table.button_player,
                 "current_player": table.current_player,
                 "betting": table.betting,
                 "ongoing": table.player_ongoing,
-                "board": table.board,
+                "board": [c.to_dict() for c in table.board],
                 "pot_size": table.current_pot_size,
             }
         broadcast_msg = {
@@ -49,7 +52,7 @@ class GameState(ConcreteState):
             "current_player": table.current_player,
             "betting": table.betting,
             "ongoing": table.player_ongoing,
-            "board": table.board,
+            "board": [c.to_dict() for c in table.board],
             "pot_size": table.current_pot_size,
         }
         await notify(unicast_msg, broadcast_msg)
@@ -126,7 +129,7 @@ class BeforeGameState(GameState):
                 table.player_seating_chart[seat_num] = action_player
                 table.player_num += 1
                 table.player_ongoing[seat_num] = True
-                table.hands[action_player.id] = Deck([])
+                table.hands[action_player.id] = []
                 await table_context.set_table(table)
             else:
                 pass
@@ -181,7 +184,7 @@ class BeforeGameState(GameState):
         table.deck = Deck()
         table.deck.shuffle()
         for player_id in table.hands.keys():
-            table.hands[player_id] = table.deck.draw(2)
+            table.hands[player_id] = table.deck.draw(2).cards
         await table_context.set_table(table)
         table.status = "preflop"
         await table_context.set_table(table)
@@ -200,7 +203,8 @@ class PreflopStreetState(StreetState):
         table = table_context.get_table()
         table.next_round_initialize()
         if table.player_ongoing.count(True) > 1:
-            table.board.extend(table.deck.draw(3).to_dict_list())
+            table.board.extend(table.deck.draw(3).cards)
+        table.update_hand_rank()
         table.status = "flop"
         await table_context.set_state(FlopStreetState())
 
@@ -214,7 +218,8 @@ class FlopStreetState(StreetState):
         table = table_context.get_table()
         table.next_round_initialize()
         if table.player_ongoing.count(True) > 1:
-            table.board.extend(table.deck.draw(1).to_dict_list())
+            table.board.extend(table.deck.draw(1).cards)
+        table.update_hand_rank()
         table.status = "turn"
         await table_context.set_state(TurnStreetState())
 
@@ -228,7 +233,8 @@ class TurnStreetState(StreetState):
         table = table_context.get_table()
         table.next_round_initialize()
         if table.player_ongoing.count(True) > 1:
-            table.board.extend(table.deck.draw(1).to_dict_list())
+            table.board.extend(table.deck.draw(1).cards)
+        table.update_hand_rank()
         table.status = "river"
         await table_context.set_state(RiverStreetState())
 
@@ -266,7 +272,8 @@ class GameEndState(GameState):
         table.hands = {}
         for player in table.player_seating_chart:
             if player is not None:
-                table.hands[player.id] = Deck([])
+                table.hands[player.id] = []
+        table.hand_ranks = {}
         table.board = []
         table.betting = [0 for _ in range(table.players_limit)]
         table.player_ongoing = [v is not None for v in table.player_seating_chart]
