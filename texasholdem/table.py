@@ -29,6 +29,9 @@ class Table:
         self.betting = [0 for _ in range(players_limit)]
         self.player_ongoing = [False for _ in range(players_limit)]
         self.played = [False for _ in range(players_limit)]
+        self.showdown_hands = [
+            None for _ in range(players_limit)
+        ]  # type: List[List[Card]]
         self.current_betting_amount = 0
         self.current_pot_size = 0
         self.status = "beforeGame"
@@ -67,6 +70,12 @@ class Table:
             "betting: player_seat = {}, amount = {}".format(player_seat, amount)
         )
         return True
+
+    def showdown(self, player_seat: int):
+        self.showdown_hands[player_seat] = self.hands[
+            self.player_seating_chart[player_seat].id
+        ]
+        return
 
     def is_round_over(self):
         logger.debug("checking is_round_over...")

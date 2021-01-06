@@ -36,6 +36,10 @@ class GameState(ConcreteState):
                 "hand_rank": str(table.hand_ranks[player_id])
                 if player_id in table.hand_ranks
                 else None,
+                "showdown_hands": [
+                    [c.to_dict() for c in h] if h is not None else None
+                    for h in table.showdown_hands
+                ],
                 "seating_chart": table.player_seating_chart,
                 "button_player": table.button_player,
                 "current_player": table.current_player,
@@ -47,6 +51,10 @@ class GameState(ConcreteState):
         broadcast_msg = {
             "state": table.status,
             "hand": [],
+            "showdown_hands": [
+                [c.to_dict() for c in h] if h is not None else None
+                for h in table.showdown_hands
+            ],
             "seating_chart": table.player_seating_chart,
             "button_player": table.button_player,
             "current_player": table.current_player,
@@ -249,6 +257,45 @@ class RiverStreetState(StreetState):
         table.next_round_initialize()
         if table.player_ongoing.count(True) > 1:
             pass
+        table.status = "showdown"
+        await table_context.set_state(ShowdownState())
+
+
+class ShowdownState(GameState):
+    async def handle(self, table_context: TableContext, msg: dict):
+        logger.debug("state: {}".format("Showdown State"))
+        await self.invoke_action(table_context, msg)
+
+    async def action_showdown(self, table_context: TableContext, msg: dict):
+        table = table_context.get_table()
+        action_player = self.get_action_player(msg)
+        if action_player is table.player_seating_chart[table.current_player]:
+            logger.debug("[ACTION] SHOWDOWN")
+            table.showdown(
+                table.current_player,
+            )
+            table.played[table.current_player] = True
+            table.next_player()
+            await table_context.set_table(table)
+        else:
+            return
+
+    async def action_muck(self, table_context: TableContext, msg: dict):
+        table = table_context.get_table()
+        action_player = self.get_action_player(msg)
+        if action_player is table.player_seating_chart[table.current_player]:
+            logger.debug("[ACTION] MUCK")
+            table.player_ongoing[table.current_player] = False
+            table.next_player()
+            await table_context.set_table(table)
+        else:
+            return
+
+    async def next_round(self, table_context: TableContext):
+        table = table_context.get_table()
+        table.next_round_initialize()
+        if table.player_ongoing.count(True) > 1:
+            pass
         table.status = "gameEnd"
         await table_context.set_state(GameEndState())
 
@@ -258,6 +305,17 @@ class GameEndState(GameState):
         logger.debug("state: {}".format("GameEnd State"))
         await self.invoke_action(table_context, msg)
 
+    async def action_check(self, table_context: TableContext, msg: dict):
+        table = table_context.get_table()
+        action_player = self.get_action_player(msg)
+        if action_player is table.player_seating_chart[table.current_player]:
+            logger.debug("[ACTION] CHECK")
+            table.played[table.current_player] = True
+            table.next_player()
+            await table_context.set_table(table)
+        else:
+            return
+
     async def next_round(self, table_context: TableContext):
         table = table_context.get_table()
         if table.player_ongoing.count(True) == 1:
@@ -265,8 +323,18 @@ class GameEndState(GameState):
                 table.player_ongoing.index(True)
             ].bankroll += table.current_pot_size
         else:
-            # 勝敗判定処理
-            pass
+            winner_index = None
+            winner_rank = None
+            for i in range(table.players_limit):
+                if table.player_ongoing[i]:
+                    if winner_index is None:
+                        winner_index = i
+                        winner_rank = table.hand_ranks[i]
+                    else:
+                        if table.hand_ranks[i] > winner_rank:
+                            winner_index = i
+                            winner_rank = table.hand_ranks[i]
+            table.player_seating_chart[winner_index].bankroll += table.current_pot_size
 
         # 初期化処理
         table.hands = {}
@@ -278,6 +346,7 @@ class GameEndState(GameState):
         table.betting = [0 for _ in range(table.players_limit)]
         table.player_ongoing = [v is not None for v in table.player_seating_chart]
         table.played = [False for _ in range(table.players_limit)]
+        table.showdown_hands = [None for _ in range(table.players_limit)]
         table.current_betting_amount = 0
         table.current_pot_size = 0
         table.status = "beforeGame"
