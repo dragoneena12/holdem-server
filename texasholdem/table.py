@@ -78,12 +78,16 @@ class Table:
         return
 
     def is_round_over(self):
-        logger.debug("checking is_round_over...")
+        logger.debug("Table.is_round_over: checking is_round_over...")
         # そもそも参加者がいない場合
         if self.player_ongoing.count(True) == 0:
+            logger.debug("Table.is_round_over: There is no player.")
             return False
         # 参加者が一人になった場合
         elif self.player_ongoing.count(True) == 1:
+            logger.debug(
+                "Table.is_round_over: There is only one ongoing player. Go to next round!"
+            )
             return True
 
         # 参加者全員がプレイ済み　かつ　全員のベット額が一致

@@ -212,7 +212,7 @@ class PreflopStreetState(StreetState):
         table.next_round_initialize()
         if table.player_ongoing.count(True) > 1:
             table.board.extend(table.deck.draw(3).cards)
-        table.update_hand_rank()
+            table.update_hand_rank()
         table.status = "flop"
         await table_context.set_state(FlopStreetState())
 
@@ -227,7 +227,7 @@ class FlopStreetState(StreetState):
         table.next_round_initialize()
         if table.player_ongoing.count(True) > 1:
             table.board.extend(table.deck.draw(1).cards)
-        table.update_hand_rank()
+            table.update_hand_rank()
         table.status = "turn"
         await table_context.set_state(TurnStreetState())
 
@@ -242,7 +242,7 @@ class TurnStreetState(StreetState):
         table.next_round_initialize()
         if table.player_ongoing.count(True) > 1:
             table.board.extend(table.deck.draw(1).cards)
-        table.update_hand_rank()
+            table.update_hand_rank()
         table.status = "river"
         await table_context.set_state(RiverStreetState())
 
