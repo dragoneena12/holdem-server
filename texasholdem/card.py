@@ -13,8 +13,8 @@ BASE_PIPS_COURTS = "A23456789TJQK"
 @total_ordering
 class Card:
     def __init__(self, number: int, suit: str):
-        assert 1 <= number <= 13
-        assert suit in BASE_SUIT
+        assert 0 <= number <= 13
+        assert suit in BASE_SUIT or suit == "B"
 
         self.number = number
         self.suit = suit

@@ -21,6 +21,7 @@ class GameState(ConcreteState):
             pass
 
     def get_action_player(self, msg: dict):
+        logger.debug("get_action_player called")
         player_id = msg["client_id"]
         player_name = msg["name"]
         return Player.get_player_by_id(player_id, player_name)
@@ -93,12 +94,14 @@ class BeforeGameState(GameState):
         table = table_context.get_table()
         seat_num = int(msg["amount"])
         action_player = self.get_action_player(msg)
+        logger.debug("[ACTION] SEAT")
         table.seat_player(action_player, seat_num)
         await table_context.set_table(table)
 
     async def action_leave(self, table_context: TableContext, msg: dict):
         table = table_context.get_table()
         action_player = self.get_action_player(msg)
+        logger.debug("[ACTION] LEAVE")
         table.leave_player(action_player)
         await table_context.set_table(table)
 
@@ -108,12 +111,14 @@ class BeforeGameState(GameState):
             return
         logger.debug("state: {}".format("Game Start!"))
         table = table_context.get_table()
+        logger.debug("state: {}".format("Determining next button player..."))
         if table.current_player == -1:
             table.current_player = random.randint(0, table.players_limit - 1)
         else:
             table.current_player = table.button_player
         table.next_player()
         table.button_player = table.current_player
+        logger.debug("state: {}".format("Betting blinds..."))
         if table.player_num == 2:
             table.bet(table.stakes["SB"])
             table.next_player()
@@ -125,11 +130,13 @@ class BeforeGameState(GameState):
             table.next_player()
             table.bet(table.stakes["BB"])
             table.next_player()
+        logger.debug("state: {}".format("Dealing hands..."))
         table.status = "dealingHands"
         table.deck = Deck()
         table.deck.shuffle()
-        for p in table.player_seating_chart():
-            p.hand = table.deck.draw(2).cards
+        for p in table.player_seating_chart:
+            if p is not None:
+                p.hand = table.deck.draw(2).cards
         table.status = "preflop"
         await table_context.set_table(table)
         await table_context.set_state(PreflopStreetState())
@@ -146,7 +153,7 @@ class PreflopStreetState(StreetState):
     async def next_round(self, table_context: TableContext):
         table = table_context.get_table()
         table.next_round_initialize()
-        if table.player_ongoing.count(True) > 1:
+        if table.ongoing_players_count() > 1:
             table.board.extend(table.deck.draw(3).cards)
             table.update_hand_rank()
         table.status = "flop"
@@ -162,7 +169,7 @@ class FlopStreetState(StreetState):
     async def next_round(self, table_context: TableContext):
         table = table_context.get_table()
         table.next_round_initialize()
-        if table.player_ongoing.count(True) > 1:
+        if table.ongoing_players_count() > 1:
             table.board.extend(table.deck.draw(1).cards)
             table.update_hand_rank()
         table.status = "turn"
@@ -178,7 +185,7 @@ class TurnStreetState(StreetState):
     async def next_round(self, table_context: TableContext):
         table = table_context.get_table()
         table.next_round_initialize()
-        if table.player_ongoing.count(True) > 1:
+        if table.ongoing_players_count() > 1:
             table.board.extend(table.deck.draw(1).cards)
             table.update_hand_rank()
         table.status = "river"
@@ -194,8 +201,6 @@ class RiverStreetState(StreetState):
     async def next_round(self, table_context: TableContext):
         table = table_context.get_table()
         table.next_round_initialize()
-        if table.player_ongoing.count(True) > 1:
-            pass
         table.status = "showdown"
         await table_context.set_table(table)
         await table_context.set_state(ShowdownState())
@@ -225,8 +230,6 @@ class ShowdownState(GameState):
     async def next_round(self, table_context: TableContext):
         table = table_context.get_table()
         table.next_round_initialize()
-        if table.player_ongoing.count(True) > 1:
-            pass
         table.status = "gameEnd"
         await table_context.set_table(table)
         await table_context.set_state(GameEndState())

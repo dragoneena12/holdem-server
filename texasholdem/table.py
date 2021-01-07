@@ -62,12 +62,21 @@ class Table:
         self.stakes = {"SB": sb, "BB": bb, "ante": ante}
 
     def __find_player_index(self, player: Player):
+        logger.debug("__find_player_index called")
         for i in range(self.players_limit):
-            if self.player_seating_chart[i].player is player:
-                return i
+            if self.player_seating_chart[i] is not None:
+                if self.player_seating_chart[i].player is player:
+                    return i
         return None
 
     def seat_player(self, player: Player, seat_num: int):
+        logger.debug("seat_player called")
+        logger.debug(
+            "seat_player: can player seat? {}, {}".format(
+                self.player_seating_chart[seat_num] is None,
+                self.__find_player_index(player) is None,
+            )
+        )
         if (
             self.player_seating_chart[seat_num] is None
             and self.__find_player_index(player) is None
@@ -82,16 +91,22 @@ class Table:
             self.player_num -= 1
 
     def next_player(self):
+        logger.debug("next_player: current_player = {}".format(self.current_player))
         cp = self.current_player
         cp = (cp + 1) % self.players_limit
-        while not self.player_seating_chart[cp].ongoing:
+        while (
+            not self.player_seating_chart[cp].ongoing
+            if self.player_seating_chart[cp] is not None
+            else True
+        ):
+            logger.debug("cp: {}".format(cp))
             cp = (cp + 1) % self.players_limit
         logger.debug("next player is {} !".format(cp))
         self.current_player = cp
 
     def bet(self, amount: int):
         if not self.player_seating_chart[self.current_player].player.pay(
-            amount - self.betting[self.current_player]
+            amount - self.player_seating_chart[self.current_player].betting
         ):
             logger.debug("state: {}".format("Bankroll in not enough."))
             # raise Exception("Bankroll in not enough.") TODO: いい感じの例外クラスを作る
@@ -131,16 +146,25 @@ class Table:
         self.player_seating_chart[self.current_player].played = True
         self.next_player()
 
+    def ongoing_players_count(self):
+        n = 0
+        for p in self.player_seating_chart:
+            if p is not None:
+                if p.ongoing:
+                    n += 1
+        return n
+
     def is_current_player(self, player: Player):
-        return self.player_seating_chart[self.current_player] is player
+        logger.debug("is_current_player called")
+        return (
+            self.player_seating_chart[self.current_player]
+            and self.player_seating_chart[self.current_player].player.id == player.id
+        )
 
     def is_round_over(self):
         logger.debug("Table.is_round_over: checking is_round_over...")
 
-        ongoing_players_count = 0
-        for p in self.player_seating_chart:
-            if p.ongoing:
-                ongoing_players_count += 1
+        ongoing_players_count = self.ongoing_players_count()
 
         # そもそも参加者がいない場合
         if ongoing_players_count == 0:
@@ -157,12 +181,14 @@ class Table:
             not self.player_seating_chart[i].ongoing
             or self.player_seating_chart[i].played
             for i in range(self.players_limit)
+            if self.player_seating_chart[i] is not None
         )
 
         is_match_all_betting_amount = all(
             self.player_seating_chart[i].betting == self.current_betting_amount
             for i in range(self.players_limit)
-            if self.player_seating_chart[i].ongoing
+            if self.player_seating_chart[i] is not None
+            and self.player_seating_chart[i].ongoing
         )
 
         logger.debug(
@@ -175,11 +201,10 @@ class Table:
         return is_all_played and is_match_all_betting_amount
 
     def next_round_initialize(self):
-        self.current_pot_size += reduce(
-            lambda a, b: a.betting + b.betting, self.player_seating_chart
-        )
+        logger.debug("next_round_initialize called")
         for p in self.player_seating_chart:
             if p is not None:
+                self.current_pot_size += p.betting
                 p.betting = 0
                 p.played = False
         self.current_betting_amount = 0
@@ -187,24 +212,29 @@ class Table:
         self.next_player()
 
     def update_hand_rank(self):
+        logger.debug("update_hand_rank called")
         for p in self.player_seating_chart:
             if p is not None:
                 p.hand_rank = HandRank(p.hand + self.board)
 
     def game_end(self):
+        logger.debug("game_end called")
         ongoing_players_count = 0
         ongoing_player = None
         for p in self.player_seating_chart:
-            if p.ongoing:
+            if p is not None and p.ongoing:
                 ongoing_players_count += 1
                 ongoing_player = p
 
         if ongoing_players_count == 1:
+            logger.debug("only one player is ongoing")
             ongoing_player.bankroll += self.current_pot_size
         else:
+            logger.debug("there are multiple players ongoing")
             winner_index = None
             winner_rank = None
             for i in range(self.players_limit):
+                logger.debug("i: {}".format(i))
                 if self.player_seating_chart[i] is not None:
                     if self.player_seating_chart[i].ongoing:
                         if winner_index is None:
@@ -214,8 +244,12 @@ class Table:
                             if self.player_seating_chart[i].hand_rank > winner_rank:
                                 winner_index = i
                                 winner_rank = self.player_seating_chart[i].hand_rank
-            self.player_seating_chart[winner_index].bankroll += self.current_pot_size
+            logger.debug("winner is {}".format(i))
+            self.player_seating_chart[
+                winner_index
+            ].player.bankroll += self.current_pot_size
 
+        logger.debug("initializing...")
         # 初期化処理
         self.board = []
         self.current_betting_amount = 0
