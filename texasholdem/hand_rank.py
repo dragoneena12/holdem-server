@@ -77,6 +77,9 @@ class HandRank:
     def __str__(self) -> str:
         return str(self.rank)
 
+    def toJSON(self):
+        return str(self.rank)
+
 
 class HandRank5:
     def __init__(self, cards: List[Card] = None):

@@ -1,12 +1,31 @@
 from functools import reduce
 
 from texasholdem import Player, Deck, Card, HandRank
-from typing import Dict, List
+from typing import List
 
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+
+class GamingPlayer:
+    def __init__(self, player: Player):
+        self.player = player
+        self.hand = []  # type: List[Card]
+        self.hand_rank: HandRank = None
+        self.betting = 0
+        self.ongoing = True
+        self.played = False
+        self.is_showdown = False
+
+    def toJSON(self):
+        return {
+            "player": self.player,
+            "hand": self.hand if self.is_showdown else [Card(0, "B"), Card(0, "B")],
+            "betting": self.betting,
+            "ongoing": self.ongoing,
+        }
 
 
 class Table:
@@ -22,16 +41,8 @@ class Table:
         self.player_num = 0
         self.player_seating_chart = [
             None for _ in range(players_limit)
-        ]  # type: List[Player]
-        self.hands = {}  # type: Dict[str, List[Card]]
-        self.hand_ranks = {}  # type: Dict[str, HandRank]
+        ]  # type: List[GamingPlayer]
         self.board = []
-        self.betting = [0 for _ in range(players_limit)]
-        self.player_ongoing = [False for _ in range(players_limit)]
-        self.played = [False for _ in range(players_limit)]
-        self.showdown_hands = [
-            None for _ in range(players_limit)
-        ]  # type: List[List[Card]]
         self.current_betting_amount = 0
         self.current_pot_size = 0
         self.status = "beforeGame"
@@ -50,67 +61,169 @@ class Table:
     def __change_stakes(self, sb: int, bb: int, ante=0):
         self.stakes = {"SB": sb, "BB": bb, "ante": ante}
 
+    def __find_player_index(self, player: Player):
+        for i in range(self.players_limit):
+            if self.player_seating_chart[i].player is player:
+                return i
+        return None
+
+    def seat_player(self, player: Player, seat_num: int):
+        if (
+            self.player_seating_chart[seat_num] is None
+            and self.__find_player_index(player) is None
+        ):
+            self.player_seating_chart[seat_num] = GamingPlayer(player)
+            self.player_num += 1
+
+    def leave_player(self, player: Player):
+        seat_num = self.__find_player_index(player)
+        if seat_num is not None:
+            self.player_seating_chart[seat_num] = None
+            self.player_num -= 1
+
     def next_player(self):
         cp = self.current_player
         cp = (cp + 1) % self.players_limit
-        while not self.player_ongoing[cp]:
+        while not self.player_seating_chart[cp].ongoing:
             cp = (cp + 1) % self.players_limit
         logger.debug("next player is {} !".format(cp))
         self.current_player = cp
 
-    def bet(self, player_seat: int, amount: int):
-        if not self.player_seating_chart[player_seat].pay(
-            amount - self.betting[player_seat]
+    def bet(self, amount: int):
+        if not self.player_seating_chart[self.current_player].player.pay(
+            amount - self.betting[self.current_player]
         ):
             logger.debug("state: {}".format("Bankroll in not enough."))
             # raise Exception("Bankroll in not enough.") TODO: いい感じの例外クラスを作る
             return False
-        self.betting[player_seat] = amount
+        self.player_seating_chart[self.current_player].betting = amount
+        self.current_betting_amount = amount
         logger.debug(
-            "betting: player_seat = {}, amount = {}".format(player_seat, amount)
+            "betting: current_player = {}, amount = {}".format(
+                self.current_player, amount
+            )
         )
         return True
 
-    def showdown(self, player_seat: int):
-        self.showdown_hands[player_seat] = self.hands[
-            self.player_seating_chart[player_seat].id
-        ]
-        return
+    def call(self):
+        if self.bet(self.current_betting_amount):
+            self.player_seating_chart[self.current_player].played = True
+            self.next_player()
+
+    def action_raise(self, amount: int):
+        if amount < self.current_betting_amount:
+            return
+        if self.bet(amount):
+            self.player_seating_chart[self.current_player].played = True
+            self.next_player()
+
+    def fold(self):
+        self.player_seating_chart[self.current_player].ongoing = False
+        self.next_player()
+
+    def check(self):
+        if self.current_betting_amount == 0:
+            self.player_seating_chart[self.current_player].played = True
+            self.next_player()
+
+    def showdown(self):
+        self.player_seating_chart[self.current_player].is_showdown = True
+        self.player_seating_chart[self.current_player].played = True
+        self.next_player()
+
+    def is_current_player(self, player: Player):
+        return self.player_seating_chart[self.current_player] is player
 
     def is_round_over(self):
         logger.debug("Table.is_round_over: checking is_round_over...")
+
+        ongoing_players_count = 0
+        for p in self.player_seating_chart:
+            if p.ongoing:
+                ongoing_players_count += 1
+
         # そもそも参加者がいない場合
-        if self.player_ongoing.count(True) == 0:
+        if ongoing_players_count == 0:
             logger.debug("Table.is_round_over: There is no player.")
             return False
         # 参加者が一人になった場合
-        elif self.player_ongoing.count(True) == 1:
+        elif ongoing_players_count == 1:
             logger.debug(
                 "Table.is_round_over: There is only one ongoing player. Go to next round!"
             )
             return True
 
-        # 参加者全員がプレイ済み　かつ　全員のベット額が一致
-        return all(
-            not self.player_ongoing[i] or self.played[i]
+        is_all_played = all(
+            not self.player_seating_chart[i].ongoing
+            or self.player_seating_chart[i].played
             for i in range(self.players_limit)
-        ) and all(
-            v == self.current_betting_amount
-            for i, v in enumerate(self.betting)
-            if self.player_ongoing[i]
         )
 
+        is_match_all_betting_amount = all(
+            self.player_seating_chart[i].betting == self.current_betting_amount
+            for i in range(self.players_limit)
+            if self.player_seating_chart[i].ongoing
+        )
+
+        logger.debug(
+            "is_all_played: {}, is_match_all_betting_amount: {}".format(
+                is_all_played, is_match_all_betting_amount
+            )
+        )
+
+        # 参加者全員がプレイ済み　かつ　全員のベット額が一致
+        return is_all_played and is_match_all_betting_amount
+
     def next_round_initialize(self):
-        self.current_pot_size += reduce(lambda a, b: a + b, self.betting)
-        self.betting = [0 for _ in self.betting]
-        self.played = [False for _ in self.played]
+        self.current_pot_size += reduce(
+            lambda a, b: a.betting + b.betting, self.player_seating_chart
+        )
+        for p in self.player_seating_chart:
+            if p is not None:
+                p.betting = 0
+                p.played = False
         self.current_betting_amount = 0
         self.current_player = self.button_player
         self.next_player()
 
     def update_hand_rank(self):
-        for player in self.player_seating_chart:
-            if player is not None:
-                self.hand_ranks[player.id] = HandRank(
-                    self.hands[player.id] + self.board
-                )
+        for p in self.player_seating_chart:
+            if p is not None:
+                p.hand_rank = HandRank(p.hand + self.board)
+
+    def game_end(self):
+        ongoing_players_count = 0
+        ongoing_player = None
+        for p in self.player_seating_chart:
+            if p.ongoing:
+                ongoing_players_count += 1
+                ongoing_player = p
+
+        if ongoing_players_count == 1:
+            ongoing_player.bankroll += self.current_pot_size
+        else:
+            winner_index = None
+            winner_rank = None
+            for i in range(self.players_limit):
+                if self.player_seating_chart[i] is not None:
+                    if self.player_seating_chart[i].ongoing:
+                        if winner_index is None:
+                            winner_index = i
+                            winner_rank = self.player_seating_chart[i].hand_rank
+                        else:
+                            if self.player_seating_chart[i].hand_rank > winner_rank:
+                                winner_index = i
+                                winner_rank = self.player_seating_chart[i].hand_rank
+            self.player_seating_chart[winner_index].bankroll += self.current_pot_size
+
+        # 初期化処理
+        self.board = []
+        self.current_betting_amount = 0
+        self.current_pot_size = 0
+        for p in self.player_seating_chart:
+            if p is not None:
+                p.hand = []
+                p.hand_rank = None
+                p.played = False
+                p.ongoing = True
+                p.is_showdown = False

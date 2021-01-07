@@ -27,7 +27,9 @@ class Card:
     def __lt__(self, other) -> bool:
         if not isinstance(other, Card):
             return NotImplemented
-        self_number, other_number = [14 if n == 1 else n for n in [self.number, other.number]]
+        self_number, other_number = [
+            14 if n == 1 else n for n in [self.number, other.number]
+        ]
         return self_number < other_number
 
     def __str__(self):
@@ -43,4 +45,7 @@ class Card:
         return BASE_PIPS_COURTS[self.number - 1] + self.suit
 
     def to_dict(self):
+        return {"number": self.number, "suit": self.suit}
+
+    def toJSON(self):
         return {"number": self.number, "suit": self.suit}
