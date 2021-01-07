@@ -228,7 +228,7 @@ class Table:
 
         if ongoing_players_count == 1:
             logger.debug("only one player is ongoing")
-            ongoing_player.bankroll += self.current_pot_size
+            ongoing_player.player.bankroll += self.current_pot_size
         else:
             logger.debug("there are multiple players ongoing")
             winner_index = None

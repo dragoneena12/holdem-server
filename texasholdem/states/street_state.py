@@ -138,7 +138,6 @@ class BeforeGameState(GameState):
             if p is not None:
                 p.hand = table.deck.draw(2).cards
         table.status = "preflop"
-        await table_context.set_table(table)
         await table_context.set_state(PreflopStreetState())
 
     async def next_round(self, table_context: TableContext):
@@ -157,7 +156,6 @@ class PreflopStreetState(StreetState):
             table.board.extend(table.deck.draw(3).cards)
             table.update_hand_rank()
         table.status = "flop"
-        await table_context.set_table(table)
         await table_context.set_state(FlopStreetState())
 
 
@@ -173,7 +171,6 @@ class FlopStreetState(StreetState):
             table.board.extend(table.deck.draw(1).cards)
             table.update_hand_rank()
         table.status = "turn"
-        await table_context.set_table(table)
         await table_context.set_state(TurnStreetState())
 
 
@@ -189,7 +186,6 @@ class TurnStreetState(StreetState):
             table.board.extend(table.deck.draw(1).cards)
             table.update_hand_rank()
         table.status = "river"
-        await table_context.set_table(table)
         await table_context.set_state(RiverStreetState())
 
 
@@ -202,7 +198,6 @@ class RiverStreetState(StreetState):
         table = table_context.get_table()
         table.next_round_initialize()
         table.status = "showdown"
-        await table_context.set_table(table)
         await table_context.set_state(ShowdownState())
 
 
@@ -231,7 +226,6 @@ class ShowdownState(GameState):
         table = table_context.get_table()
         table.next_round_initialize()
         table.status = "gameEnd"
-        await table_context.set_table(table)
         await table_context.set_state(GameEndState())
 
 
@@ -252,5 +246,4 @@ class GameEndState(GameState):
         table = table_context.get_table()
         table.game_end()
         table.status = "beforeGame"
-        await table_context.set_table(table)
         await table_context.set_state(BeforeGameState())
